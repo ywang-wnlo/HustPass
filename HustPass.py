@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
 import re
+import sys
 import getpass
 import requests
 
@@ -33,10 +35,16 @@ class HustPass(object):
         if self._debug:
             with open('login.html', 'wb') as f:
                 f.write(login_response.content)
-            print(self._post_data)
+            print(sys._getframe().f_code.co_name, self._post_data)
 
     def get_rsa(self) -> None:
-        pass
+        node_cmd = 'node des {} {} {}'.format(
+            self._user, self._pwd, self._post_data['lt'])
+        with os.popen(node_cmd) as nodejs:
+            self._post_data['rsa'] = nodejs.read().replace('\n', '')
+
+        if self._debug:
+            print(sys._getframe().f_code.co_name, self._post_data)
 
     def handle_code(self) -> None:
         pass
