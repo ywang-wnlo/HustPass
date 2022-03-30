@@ -47,7 +47,16 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name, self._post_data)
 
     def handle_code(self) -> None:
-        pass
+        self._headers['Host'] = 'pass.hust.edu.cn'
+        self._headers['Referer'] = 'https://pass.hust.edu.cn/cas/login'
+        code_response = self._session.get(
+            'https://pass.hust.edu.cn/cas/code', headers=self._headers)
+        with open('code.gif', 'wb') as f:
+            f.write(code_response.content)
+        self._post_data['code'] = input('请手动查看 code.gif 并输入验证码：')
+
+        if self._debug:
+            print(sys._getframe().f_code.co_name, self._post_data)
 
     def get_cookies(self) -> dict:
         return {}
