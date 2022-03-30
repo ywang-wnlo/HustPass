@@ -10,13 +10,17 @@ class HustPass(object):
         self._pwd = pwd
         self._debug = debug
         self._session = requests.session()
+        self._post_data = {
+            'ul': len(self._user),
+            'pl': len(self._pwd)
+        }
         self._headers = {
             'Host': None,
             'Referer': None,
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.84 Safari/537.36',
         }
 
-    def get_base_post_data(self) -> dict:
+    def get_base_post_data(self) -> None:
         self._headers['Host'] = 'pass.hust.edu.cn'
         self._headers['Referer'] = 'https://pass.hust.edu.cn/'
         login_response = self._session.get(
@@ -24,36 +28,27 @@ class HustPass(object):
         login_response.encoding = 'utf8'
         post_data_list = re.findall(
             r'name="(\S+)" value="(\S+)"', login_response.text)
-        post_data = dict(post_data_list)
-        post_data['ul'] = len(self._user)
-        post_data['pl'] = len(self._pwd)
+        self._post_data.update(dict(post_data_list))
 
         if self._debug:
             with open('login.html', 'wb') as f:
                 f.write(login_response.content)
-            print(post_data)
+            print(self._post_data)
 
-        return post_data
+    def get_rsa(self) -> None:
+        pass
 
-    def get_rsa(self) -> str:
-        return 'ABCDEFG'
+    def handle_code(self) -> None:
+        pass
 
-    def handle_code(self) -> str:
-        return '0000'
-
-    def get_cookies(self, post_data) -> dict:
+    def get_cookies(self) -> dict:
         return {}
 
     def run(self) -> dict:
-        post_data = self.get_base_post_data()
-
-        rsa = self.get_rsa()
-        post_data['rsa'] = rsa
-
-        code = self.handle_code()
-        post_data['code'] = code
-
-        return self.get_cookies(post_data)
+        self.get_base_post_data()
+        self.get_rsa()
+        self.handle_code()
+        return self.get_cookies()
 
 
 if __name__ == '__main__':
