@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import re
 import getpass
 import requests
 
 class HustPass(object):
-    def __init__(self, user, pwd) -> None:
+    def __init__(self, user, pwd, debug=False) -> None:
         self._user = user
         self._pwd = pwd
+        self._debug = debug
         self._session = requests.session()
         self._headers = {
             'Host': None,
@@ -15,10 +17,22 @@ class HustPass(object):
         }
 
     def get_base_post_data(self) -> dict:
-        post_data = {
-            'ul': len(self._user),
-            'pl': len(self._pwd),
-        }
+        self._headers['Host'] = 'pass.hust.edu.cn'
+        self._headers['Referer'] = 'https://pass.hust.edu.cn/'
+        login_response = self._session.get(
+            'https://pass.hust.edu.cn/cas/login', headers=self._headers)
+        login_response.encoding = 'utf8'
+        post_data_list = re.findall(
+            r'name="(\S+)" value="(\S+)"', login_response.text)
+        post_data = dict(post_data_list)
+        post_data['ul'] = len(self._user)
+        post_data['pl'] = len(self._pwd)
+
+        if self._debug:
+            with open('login.html', 'wb') as f:
+                f.write(login_response.content)
+            print(post_data)
+
         return post_data
 
     def get_rsa(self) -> str:
@@ -43,6 +57,6 @@ class HustPass(object):
 
 
 if __name__ == '__main__':
-    hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'))
+    hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'), debug=True)
     cookies = hustPass.run()
     print(cookies)
