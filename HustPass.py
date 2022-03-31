@@ -4,8 +4,8 @@ import os
 import re
 import sys
 import getpass
-from urllib.parse import urljoin, urlparse
 import requests
+from urllib.parse import urljoin
 
 
 class HustPass(object):
@@ -14,7 +14,6 @@ class HustPass(object):
         self._pwd = pwd
         self._debug = debug
         self._session = requests.session()
-        self._last_url = None
         self._next_urls = []
         self._post_data = {
             'ul': len(self._user),
@@ -28,8 +27,6 @@ class HustPass(object):
 
     def get_base_post_data(self) -> None:
         login_url = 'https://pass.hust.edu.cn/cas/login'
-        self._headers['Host'] = 'pass.hust.edu.cn'
-        self._headers['Referer'] = 'https://pass.hust.edu.cn/'
         login_response = self._session.get(login_url, headers=self._headers)
         login_response.encoding = 'utf8'
         post_data_list = re.findall(
@@ -60,8 +57,6 @@ class HustPass(object):
 
     def handle_code(self) -> None:
         code_url = self._next_urls.pop(0)
-        self._headers['Host'] = 'pass.hust.edu.cn'
-        self._headers['Referer'] = 'https://pass.hust.edu.cn/cas/login'
         code_response = self._session.get(code_url, headers=self._headers)
         with open('code.gif', 'wb') as f:
             f.write(code_response.content)
@@ -72,8 +67,6 @@ class HustPass(object):
 
     def post_login(self) -> None:
         post_url = self._next_urls.pop(0)
-        self._headers['Host'] = 'pass.hust.edu.cn'
-        self._headers['Referer'] = 'http://pass.hust.edu.cn'
         post_response = self._session.post(
             post_url, headers=self._headers, data=self._post_data, allow_redirects=False)
         self._next_urls.append(post_response.headers['Location'])
@@ -84,15 +77,11 @@ class HustPass(object):
 
     def stage1_redirect(self) -> None:
         redirect_url = self._next_urls.pop(0)
-        parse = urlparse(redirect_url)
-        self._headers['Host'] = parse.hostname
-        self._headers['Referer'] = None
         redirect_response = self._session.get(
             redirect_url, headers=self._headers, allow_redirects=False)
         redirect_response.encoding = 'utf8'
         refresh_suburl = re.findall(r'url=(\S+)"', redirect_response.text)[0]
         self._next_urls.append(urljoin(redirect_response.url, refresh_suburl))
-        self._last_url = redirect_url
 
         if self._debug:
             with open('stage1_redirect.html', 'wb') as f:
@@ -102,9 +91,6 @@ class HustPass(object):
 
     def stage2_refresh(self) -> None:
         refresh_url = self._next_urls.pop(0)
-        parse = urlparse(refresh_url)
-        self._headers['Host'] = parse.hostname
-        self._headers['Referer'] = self._last_url
         refresh_response = self._session.get(
             refresh_url, headers=self._headers, allow_redirects=False)
         self._next_urls.append(refresh_response.headers['Location'])
@@ -116,9 +102,6 @@ class HustPass(object):
 
     def handle_redirect(self) -> requests.Response:
         redirect_url = self._next_urls.pop(0)
-        parse = urlparse(redirect_url)
-        self._headers['Host'] = parse.hostname
-        self._headers['Referer'] = self._last_url
         redirect_response = self._session.get(
             redirect_url, headers=self._headers, allow_redirects=False)
         return redirect_response
@@ -146,7 +129,6 @@ class HustPass(object):
         response.encoding = 'utf8'
         refresh_suburl = re.findall(r'url=(\S+)"', response.text)[0]
         self._next_urls.append(urljoin(response.url, refresh_suburl))
-        self._last_url = response.url
 
         if self._debug:
             with open('stage5_redirect.html', 'wb') as f:
@@ -156,11 +138,8 @@ class HustPass(object):
 
     def stage6_refresh(self) -> None:
         refresh_url = self._next_urls.pop(0)
-        parse = urlparse(refresh_url)
-        self._headers['Host'] = parse.hostname
-        self._headers['Referer'] = self._last_url
         refresh_response = self._session.get(
-            refresh_url,  headers=self._headers, allow_redirects=False)
+            refresh_url, headers=self._headers, allow_redirects=False)
 
         if self._debug:
             with open('stage6_refresh.html', 'wb') as f:
