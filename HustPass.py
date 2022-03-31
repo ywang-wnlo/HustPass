@@ -168,12 +168,8 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name,
                   self._session.cookies.get_dict())
 
-    def get_cookies(self) -> dict:
-        print('pass.hust.edu.cn:', self._session.cookies.get_dict(
-            domain='pass.hust.edu.cn'))
-        print('one.hust.edu.cn:', self._session.cookies.get_dict(
-            domain='one.hust.edu.cn'))
-        return self._session.cookies.get_dict()
+    def get_cookies(self) -> requests.cookies.RequestsCookieJar:
+        return self._session.cookies
 
     def run(self) -> dict:
         self.get_base_post_data()
@@ -192,4 +188,5 @@ class HustPass(object):
 if __name__ == '__main__':
     hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'), debug=True)
     cookies = hustPass.run()
-    print(cookies)
+    print('pass.hust.edu.cn:', cookies.get_dict(domain='pass.hust.edu.cn'))
+    print('one.hust.edu.cn:', cookies.get_dict(domain='one.hust.edu.cn'))
