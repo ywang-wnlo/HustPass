@@ -29,6 +29,9 @@ class HustPass(object):
         }
 
     def get_base_post_data(self) -> None:
+        # get https://pass.hust.edu.cn/cas/login
+        # get post data: lt execution _eventId
+        # set Cookie [pass.hust.edu.cn] Language JSESSIONID BIGipServerpool-icdc-cas2
         login_url = 'https://pass.hust.edu.cn/cas/login'
         login_response = self._session.get(login_url, headers=self._headers)
         login_response.encoding = 'utf8'
@@ -50,6 +53,7 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name, self._post_data)
 
     def get_rsa(self) -> None:
+        # get post data: rsa
         node_cmd = 'node des {} {} {}'.format(
             self._user, self._pwd, self._post_data['lt'])
         with os.popen(node_cmd) as nodejs:
@@ -84,6 +88,7 @@ class HustPass(object):
                 pass  # 遍历所有帧结束
 
     def handle_code(self, times) -> None:
+        # get post data: code
         code_url = self._next_urls.pop(0)
         code_response = self._session.get(code_url, headers=self._headers)
         with open('code.gif', 'wb') as f:
@@ -98,6 +103,8 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name, self._post_data)
 
     def post_login(self) -> None:
+        # post https://pass.hust.edu.cn/cas/login;jsessionid=abcdefgabcdefgabcdefgabcdefgabcd-abcdefgabcdefgabcde!1234567890
+        # set Cookie [pass.hust.edu.cn] Language CASTGC
         post_url = self._next_urls.pop(0)
         post_response = self._session.post(
             post_url, headers=self._headers, data=self._post_data, allow_redirects=False)
@@ -108,6 +115,8 @@ class HustPass(object):
                   self._session.cookies.get_dict())
 
     def stage1_redirect(self) -> None:
+        # get http://one.hust.edu.cn/
+        # set Cookie [one.hust.edu.cn] BIGipServerpool-one cookiesession1
         redirect_url = self._next_urls.pop(0)
         redirect_response = self._session.get(
             redirect_url, headers=self._headers, allow_redirects=False)
@@ -122,6 +131,7 @@ class HustPass(object):
                   self._session.cookies.get_dict())
 
     def stage2_refresh(self) -> None:
+        # get http://one.hust.edu.cn/dcp/
         refresh_url = self._next_urls.pop(0)
         refresh_response = self._session.get(
             refresh_url, headers=self._headers, allow_redirects=False)
@@ -139,6 +149,8 @@ class HustPass(object):
         return redirect_response
 
     def stage3_redirect(self) -> None:
+        # get https://pass.hust.edu.cn/cas/login?service=http%3A%2F%2Fone.hust.edu.cn%2Fdcp%2Findex.jsp
+        # set Cookie [pass.hust.edu.cn] Language
         response = self.handle_redirect()
         self._next_urls.append(response.headers['Location'])
 
@@ -148,6 +160,8 @@ class HustPass(object):
                   self._session.cookies.get_dict())
 
     def stage4_redirect(self) -> None:
+        # get http://one.hust.edu.cn/dcp/index.jsp?ticket=ST-123456-ab1cd2ef3gab1cd2ef3g-cas
+        # set Cookie [one.hust.edu.cn] dcp_session_id
         response = self.handle_redirect()
         self._next_urls.append(response.headers['Location'])
 
@@ -157,6 +171,7 @@ class HustPass(object):
                   self._session.cookies.get_dict())
 
     def stage5_redirect(self) -> None:
+        # get http://one.hust.edu.cn/dcp/index.jsp
         response = self.handle_redirect()
         response.encoding = 'utf8'
         refresh_suburl = re.findall(r'url=(\S+)"', response.text)[0]
@@ -169,6 +184,7 @@ class HustPass(object):
                   self._session.cookies.get_dict())
 
     def stage6_refresh(self) -> None:
+        # get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
         refresh_url = self._next_urls.pop(0)
         refresh_response = self._session.get(
             refresh_url, headers=self._headers, allow_redirects=False)
