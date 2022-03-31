@@ -7,6 +7,9 @@ import getpass
 import requests
 from urllib.parse import urljoin
 
+import ddddocr
+from PIL import Image
+
 
 class HustPass(object):
     def __init__(self, user, pwd, debug=False) -> None:
@@ -55,12 +58,41 @@ class HustPass(object):
         if self._debug:
             print(sys._getframe().f_code.co_name, self._post_data)
 
-    def handle_code(self) -> None:
+    def ocr_handle_code(self) -> None:
+        ocr = ddddocr.DdddOcr(show_ad=False)
+        with Image.open('code.gif') as im:
+            num = 0
+            try:
+                while True:
+                    # 暂存一帧
+                    im.save('code.png')
+
+                    # OCR 识别
+                    with open('code.png', 'rb') as f:
+                        tmp = f.read()
+                        code = ocr.classification(tmp)
+                    os.remove('code.png')
+                    if len(code) == 4:
+                        code = code.replace('o', '0') # 只会出现 4 位数字，进行优化
+                        self._post_data['code'] = code
+                        break
+
+                    # 尝试下一帧
+                    num += 1
+                    im.seek(num)
+            except EOFError:
+                pass  # 遍历所有帧结束
+
+    def handle_code(self, times) -> None:
         code_url = self._next_urls.pop(0)
         code_response = self._session.get(code_url, headers=self._headers)
         with open('code.gif', 'wb') as f:
             f.write(code_response.content)
-        self._post_data['code'] = input('请手动查看 code.gif 并输入验证码：')
+
+        if times > 2:
+            self.ocr_handle_code()
+        else:
+            self._post_data['code'] = input('OCR 出错过多，请手动查看 code.gif 并输入验证码：')
 
         if self._debug:
             print(sys._getframe().f_code.co_name, self._post_data)
@@ -151,10 +183,23 @@ class HustPass(object):
         return self._session.cookies
 
     def run(self) -> dict:
-        self.get_base_post_data()
-        self.get_rsa()
-        self.handle_code()
-        self.post_login()
+        try_max_times = 5
+        while True:
+            self.get_base_post_data()
+            self.get_rsa()
+            self.handle_code(try_max_times)
+            try:
+                self.post_login()
+            except KeyError:
+                print('验证码错误!')
+                pass
+            except Exception as err:
+                print(type(err), err.args)
+            else:
+                os.remove('code.gif')
+                break
+            try_max_times -= 1
+
         self.stage1_redirect()
         self.stage2_refresh()
         self.stage3_redirect()
