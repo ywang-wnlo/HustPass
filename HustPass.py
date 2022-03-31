@@ -170,35 +170,27 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name,
                   self._session.cookies.get_dict())
 
-    def stage5_redirect(self) -> None:
-        # get http://one.hust.edu.cn/dcp/index.jsp
-        response = self.handle_redirect()
-        response.encoding = 'utf8'
-        refresh_suburl = re.findall(r'url=(\S+)"', response.text)[0]
-        self._next_urls.append(urljoin(response.url, refresh_suburl))
-
-        if self._debug:
-            with open('stage5_redirect.html', 'wb') as f:
-                f.write(response.content)
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
-    def stage6_refresh(self) -> None:
-        # get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
-        refresh_url = self._next_urls.pop(0)
-        refresh_response = self._session.get(
-            refresh_url, headers=self._headers, allow_redirects=False)
-
-        if self._debug:
-            with open('stage6_refresh.html', 'wb') as f:
-                f.write(refresh_response.content)
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
     def get_cookies(self) -> requests.cookies.RequestsCookieJar:
         return self._session.cookies
 
-    def run(self) -> dict:
+    def valid(self) -> None:
+        # use Cookie get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
+        cookies = self.get_cookies()
+        if self._debug:
+            print('pass.hust.edu.cn:', cookies.get_dict(domain='pass.hust.edu.cn'))
+            print('one.hust.edu.cn:', cookies.get_dict(domain='one.hust.edu.cn'))
+
+        response = requests.get('http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home',
+                                cookies=cookies)
+        response.encoding = 'utf8'
+        try:
+            name_id = re.findall(r'usernameandidnumber="(\S+)"', response.text)[0]
+        except IndexError:
+            print('登录《智慧华中大》失败！')
+        else:
+            print(f'{name_id} 您好，登录《智慧华中大》成功！')
+
+    def run(self) -> requests.cookies.RequestsCookieJar:
         try_max_times = 5
         while True:
             self.get_base_post_data()
@@ -207,7 +199,7 @@ class HustPass(object):
             try:
                 self.post_login()
             except KeyError:
-                print('验证码错误!')
+                print('验证码错误! 即将重试...')
                 pass
             except Exception as err:
                 print(type(err), err.args)
@@ -220,13 +212,10 @@ class HustPass(object):
         self.stage2_refresh()
         self.stage3_redirect()
         self.stage4_redirect()
-        self.stage5_redirect()
-        self.stage6_refresh()
         return self.get_cookies()
 
 
 if __name__ == '__main__':
     hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'), debug=True)
     cookies = hustPass.run()
-    print('pass.hust.edu.cn:', cookies.get_dict(domain='pass.hust.edu.cn'))
-    print('one.hust.edu.cn:', cookies.get_dict(domain='one.hust.edu.cn'))
+    hustPass.valid()
