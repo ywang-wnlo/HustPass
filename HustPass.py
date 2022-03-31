@@ -105,68 +105,12 @@ class HustPass(object):
     def post_login(self) -> None:
         # post https://pass.hust.edu.cn/cas/login;jsessionid=abcdefgabcdefgabcdefgabcdefgabcd-abcdefgabcdefgabcde!1234567890
         # set Cookie [pass.hust.edu.cn] Language CASTGC
-        post_url = self._next_urls.pop(0)
-        post_response = self._session.post(
-            post_url, headers=self._headers, data=self._post_data, allow_redirects=False)
-        self._next_urls.append(post_response.headers['Location'])
-
-        if self._debug:
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
-    def stage1_redirect(self) -> None:
-        # get http://one.hust.edu.cn/
+        # redirect http://one.hust.edu.cn/
         # set Cookie [one.hust.edu.cn] BIGipServerpool-one cookiesession1
-        redirect_url = self._next_urls.pop(0)
-        redirect_response = self._session.get(
-            redirect_url, headers=self._headers, allow_redirects=False)
-        redirect_response.encoding = 'utf8'
-        refresh_suburl = re.findall(r'url=(\S+)"', redirect_response.text)[0]
-        self._next_urls.append(urljoin(redirect_response.url, refresh_suburl))
+        post_url = self._next_urls.pop(0)
+        self._session.post(post_url, headers=self._headers, data=self._post_data)
 
         if self._debug:
-            with open('stage1_redirect.html', 'wb') as f:
-                f.write(redirect_response.content)
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
-    def stage2_refresh(self) -> None:
-        # get http://one.hust.edu.cn/dcp/
-        refresh_url = self._next_urls.pop(0)
-        refresh_response = self._session.get(
-            refresh_url, headers=self._headers, allow_redirects=False)
-        self._next_urls.append(refresh_response.headers['Location'])
-
-        if self._debug:
-            print(refresh_response.headers['Location'])
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
-    def handle_redirect(self) -> requests.Response:
-        redirect_url = self._next_urls.pop(0)
-        redirect_response = self._session.get(
-            redirect_url, headers=self._headers, allow_redirects=False)
-        return redirect_response
-
-    def stage3_redirect(self) -> None:
-        # get https://pass.hust.edu.cn/cas/login?service=http%3A%2F%2Fone.hust.edu.cn%2Fdcp%2Findex.jsp
-        # set Cookie [pass.hust.edu.cn] Language
-        response = self.handle_redirect()
-        self._next_urls.append(response.headers['Location'])
-
-        if self._debug:
-            print(response.headers['Location'])
-            print(sys._getframe().f_code.co_name,
-                  self._session.cookies.get_dict())
-
-    def stage4_redirect(self) -> None:
-        # get http://one.hust.edu.cn/dcp/index.jsp?ticket=ST-123456-ab1cd2ef3gab1cd2ef3g-cas
-        # set Cookie [one.hust.edu.cn] dcp_session_id
-        response = self.handle_redirect()
-        self._next_urls.append(response.headers['Location'])
-
-        if self._debug:
-            print(response.headers['Location'])
             print(sys._getframe().f_code.co_name,
                   self._session.cookies.get_dict())
 
@@ -186,11 +130,11 @@ class HustPass(object):
         try:
             name_id = re.findall(r'usernameandidnumber="(\S+)"', response.text)[0]
         except IndexError:
-            print('登录《智慧华中大》失败！')
+            print('获取 cookie 失败，登录逻辑可能有变化！')
         else:
-            print(f'{name_id} 您好，登录《智慧华中大》成功！')
+            print(f'{name_id} 您好，获取 cookie 成功！')
 
-    def run(self) -> requests.cookies.RequestsCookieJar:
+    def login(self) -> None:
         try_max_times = 5
         while True:
             self.get_base_post_data()
@@ -208,14 +152,9 @@ class HustPass(object):
                 break
             try_max_times -= 1
 
-        self.stage1_redirect()
-        self.stage2_refresh()
-        self.stage3_redirect()
-        self.stage4_redirect()
-        return self.get_cookies()
-
 
 if __name__ == '__main__':
     hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'), debug=True)
-    cookies = hustPass.run()
+    hustPass.login()
     hustPass.valid()
+    cookies = hustPass.get_cookies()
