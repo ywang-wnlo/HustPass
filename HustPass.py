@@ -30,7 +30,7 @@ class HustPass(object):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.84 Safari/537.36',
         }
 
-    def get_base_post_data(self) -> None:
+    def _get_base_post_data(self) -> None:
         # get https://pass.hust.edu.cn/cas/login
         # get post data: lt execution _eventId
         # set Cookie [pass.hust.edu.cn] Language JSESSIONID BIGipServerpool-icdc-cas2
@@ -54,7 +54,7 @@ class HustPass(object):
                 f.write(login_response.content)
             print(sys._getframe().f_code.co_name, self._post_data)
 
-    def get_rsa(self) -> None:
+    def _get_rsa(self) -> None:
         # get post data: rsa
         node_cmd = 'node des {} {} {}'.format(
             self._user, self._pwd, self._post_data['lt'])
@@ -64,7 +64,7 @@ class HustPass(object):
         if self._debug:
             print(sys._getframe().f_code.co_name, self._post_data)
 
-    def ocr_handle_code(self) -> None:
+    def _ocr_handle_code(self) -> None:
         ocr = ddddocr.DdddOcr(show_ad=False)
         with Image.open('code.gif') as im:
             num = 0
@@ -89,7 +89,7 @@ class HustPass(object):
             except EOFError:
                 pass  # 遍历所有帧结束
 
-    def handle_code(self, times) -> None:
+    def _handle_code(self, times) -> None:
         # get post data: code
         code_url = self._next_urls.pop(0)
         code_response = self._session.get(code_url, headers=self._headers)
@@ -97,14 +97,14 @@ class HustPass(object):
             f.write(code_response.content)
 
         if times > 2:
-            self.ocr_handle_code()
+            self._ocr_handle_code()
         else:
             self._post_data['code'] = input('OCR 出错过多，请手动查看 code.gif 并输入验证码：')
 
         if self._debug:
             print(sys._getframe().f_code.co_name, self._post_data)
 
-    def post_login(self) -> None:
+    def _post_login(self) -> None:
         # post https://pass.hust.edu.cn/cas/login;jsessionid=abcdefgabcdefgabcdefgabcdefgabcd-abcdefgabcdefgabcde!1234567890
         # set Cookie [pass.hust.edu.cn] Language CASTGC
         # 其中 CASTGC 为最重要的 cookie，不可或缺
@@ -123,21 +123,21 @@ class HustPass(object):
                 with open(bak, 'r') as f:
                     cookie = json.load(f)
                 self._session.cookies = cookiejar_from_dict(cookie)
-                if self.valid():
+                if self._valid():
                     print('备份 cookie 验证通过！')
                     return self._session.cookies
                 else:
                     print('备份 cookie 验证失败，即将重新登录...')
                     self._session.cookies = cookiejar_from_dict({})
-            self.login()
+            self._login()
 
-        if self.valid():
+        if self._valid():
             with open(bak, 'w') as f:
                 json.dump(self._session.cookies.get_dict(domain='pass.hust.edu.cn'), f)
 
         return self._session.cookies
 
-    def valid(self) -> bool:
+    def _valid(self) -> bool:
         # use Cookie get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
         session = requests.session()
         session.cookies = self._session.cookies
@@ -162,14 +162,14 @@ class HustPass(object):
             ret = True
         return ret
 
-    def login(self) -> None:
+    def _login(self) -> None:
         try_max_times = 5
         while True:
-            self.get_base_post_data()
-            self.get_rsa()
-            self.handle_code(try_max_times)
+            self._get_base_post_data()
+            self._get_rsa()
+            self._handle_code(try_max_times)
             try:
-                self.post_login()
+                self._post_login()
             except KeyError:
                 print('验证码错误! 即将重试...')
                 pass
@@ -182,7 +182,6 @@ class HustPass(object):
 
 
 if __name__ == '__main__':
-    hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'), debug=True)
-    hustPass.login()
-    hustPass.valid()
+    hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'))
     cookies = hustPass.get_cookies()
+    print(cookies.get_dict(domain='pass.hust.edu.cn'))
