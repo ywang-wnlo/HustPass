@@ -3,8 +3,10 @@
 import os
 import re
 import sys
+import json
 import getpass
 import requests
+from requests.cookies import cookiejar_from_dict
 from urllib.parse import urljoin
 
 import ddddocr
@@ -105,7 +107,8 @@ class HustPass(object):
     def post_login(self) -> None:
         # post https://pass.hust.edu.cn/cas/login;jsessionid=abcdefgabcdefgabcdefgabcdefgabcd-abcdefgabcdefgabcde!1234567890
         # set Cookie [pass.hust.edu.cn] Language CASTGC
-        # redirect http://one.hust.edu.cn/
+        # 其中 CASTGC 为最重要的 cookie，不可或缺
+        # 重定向至 http://one.hust.edu.cn/
         # set Cookie [one.hust.edu.cn] BIGipServerpool-one cookiesession1
         post_url = self._next_urls.pop(0)
         self._session.post(post_url, headers=self._headers, data=self._post_data)
@@ -114,13 +117,30 @@ class HustPass(object):
             print(sys._getframe().f_code.co_name,
                   self._session.cookies.get_dict())
 
-    def get_cookies(self) -> requests.cookies.RequestsCookieJar:
+    def get_cookies(self, bak='cookie.bak') -> requests.cookies.RequestsCookieJar:
+        if 0 == len(self._session.cookies.values()):
+            if os.path.exists(bak):
+                with open(bak, 'r') as f:
+                    cookie = json.load(f)
+                self._session.cookies = cookiejar_from_dict(cookie)
+                if self.valid():
+                    print('备份 cookie 验证通过！')
+                    return self._session.cookies
+                else:
+                    print('备份 cookie 验证失败，即将重新登录...')
+                    self._session.cookies = cookiejar_from_dict({})
+            self.login()
+
+        if self.valid():
+            with open(bak, 'w') as f:
+                json.dump(self._session.cookies.get_dict(domain='pass.hust.edu.cn'), f)
+
         return self._session.cookies
 
-    def valid(self) -> None:
+    def valid(self) -> bool:
         # use Cookie get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
         session = requests.session()
-        session.cookies = self.get_cookies()
+        session.cookies = self._session.cookies
         if self._debug:
             print('pass.hust.edu.cn:', session.cookies.get_dict(domain='pass.hust.edu.cn'))
             print('one.hust.edu.cn:', session.cookies.get_dict(domain='one.hust.edu.cn'))
@@ -135,8 +155,12 @@ class HustPass(object):
             name_id = re.findall(r'usernameandidnumber="(\S+)"', response.text)[0]
         except IndexError:
             print('获取 cookie 失败，登录逻辑可能有变化！')
+            print('请再次尝试，如多次尝试均失败，请提 issue ！')
+            ret = False
         else:
             print(f'{name_id} 您好，获取 cookie 成功！')
+            ret = True
+        return ret
 
     def login(self) -> None:
         try_max_times = 5
