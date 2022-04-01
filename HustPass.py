@@ -119,14 +119,18 @@ class HustPass(object):
 
     def valid(self) -> None:
         # use Cookie get http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home
-        cookies = self.get_cookies()
+        session = requests.session()
+        session.cookies = self.get_cookies()
         if self._debug:
-            print('pass.hust.edu.cn:', cookies.get_dict(domain='pass.hust.edu.cn'))
-            print('one.hust.edu.cn:', cookies.get_dict(domain='one.hust.edu.cn'))
+            print('pass.hust.edu.cn:', session.cookies.get_dict(domain='pass.hust.edu.cn'))
+            print('one.hust.edu.cn:', session.cookies.get_dict(domain='one.hust.edu.cn'))
 
-        response = requests.get('http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home',
-                                cookies=cookies)
+        response = session.get('http://one.hust.edu.cn/dcp/forward.action?path=/portal/portal&p=home')
         response.encoding = 'utf8'
+        if self._debug:
+            with open('valid.html', 'wb') as f:
+                f.write(response.content)
+
         try:
             name_id = re.findall(r'usernameandidnumber="(\S+)"', response.text)[0]
         except IndexError:
