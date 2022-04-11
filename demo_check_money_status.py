@@ -110,13 +110,13 @@ class CheckMoneyStatus(object):
             for key, value in xszyfmx.items():
                 if key in code2text_dict.keys():
                     one_line[code2text_dict[key]] = value
-            data_list.append(one_line)
             input_date = datetime.date.fromisoformat(one_line['录入日期'])
             one_line['录入日期'] = input_date
             credit_date = datetime.date.fromisoformat(one_line['凭证日期'])
             one_line['凭证日期'] = credit_date
             if input_date < last_month:
                 break
+            data_list.append(one_line)
             # print(one_line['年'], one_line['月'], one_line['发放项目'], one_line['实发金额'], one_line['录入日期'], one_line['凭证日期'], one_line['摘要'])
 
         # with open('data.json', 'w') as f:
