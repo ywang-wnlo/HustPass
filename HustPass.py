@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import json
+import time
 import getpass
 import requests
 from requests.cookies import cookiejar_from_dict
@@ -119,7 +120,7 @@ class HustPass(object):
 
     def get_cookies(self, bak='cookie.bak') -> requests.cookies.RequestsCookieJar:
         if 0 == len(self._session.cookies.values()):
-            if os.path.exists(bak):
+            if os.path.exists(bak) and (time.time() - os.path.getmtime(bak) < 3600):
                 with open(bak, 'r') as f:
                     cookie = json.load(f)
                 self._session.cookies = cookiejar_from_dict(cookie)
