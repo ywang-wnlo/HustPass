@@ -1,8 +1,13 @@
+# import datetime
 import random
-import datetime
+
+import matplotlib.pyplot as plt
+import numpy as np
 import requests
 from lxml import etree
 
+plt.rcParams["font.sans-serif"] = ["SimHei"]  # 设置字体
+plt.rcParams["axes.unicode_minus"] = False  # 该语句解决图像中的“-”负号的乱码问题
 
 class CheckElectricUsage(object):
     # @programId: 宿舍区
@@ -33,10 +38,45 @@ class CheckElectricUsage(object):
         # with open('main.html', 'wb') as f:
         #     f.write(response.content)
 
-        data_list = self.getTableData(response.text, 'GridView1')
-        print(data_list)
-        data_list = self.getTableData(response.text, 'GridView2')
-        print(data_list)
+        pay_list = self.getTableData(response.text, 'GridView1')
+        print(pay_list)
+        usage_list = self.getTableData(response.text, 'GridView2')
+        print(usage_list)
+
+        self._draw(usage_list)
+
+    def _draw(self, usage_list) -> None:
+        fig, ax = plt.subplots()
+        labels = []
+        y_data = []
+        y_diff = []
+
+        last = None
+        for usage in usage_list:
+            labels.insert(0, usage['抄表时间'].split()[0])
+            y_data.insert(0, float(usage['抄表值']))
+            if last is None:
+                y_diff.insert(0, 0)
+            else:
+                y_diff.insert(0, float(usage['抄表值']) - last)
+            last = float(usage['抄表值'])
+
+        x = np.arange(len(labels))  # the label locations
+        width = 0.35  # the width of the bars
+
+        rects1 = ax.bar(x - width/2, y_data, width, label='早7点 剩余电量')
+        rects2 = ax.bar(x + width/2, y_diff, width, label='当天使用量')
+
+        ax.set_ylabel('kW·h')
+        ax.set_title(self._txtyq + self._Txtroom + ' 电费使用情况')
+        ax.set_xticks(x, labels)
+        ax.legend()
+
+        ax.bar_label(rects1, padding=3)
+        ax.bar_label(rects2, padding=3)
+        fig.tight_layout()
+
+        plt.show()
 
     @staticmethod
     def getTableData(html: str, table_id: str) -> list:
