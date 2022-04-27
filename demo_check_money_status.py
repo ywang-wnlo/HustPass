@@ -1,9 +1,7 @@
 import re
-# import json
 import getpass
 import datetime
 import requests
-# from lxml import etree
 from HustPass import HustPass
 
 
@@ -46,8 +44,8 @@ class CheckMoneyStatus(object):
         # print(qid_dict)
 
         data = {
-            'qid': '1001101101',  # 学生财务信息
-            # 'qid': '1002108101', # 学生个人查询
+            # 'qid': '1001101101', # 学生财务信息
+            'qid': '1002108101', # 学生个人查询
         }
         response = session.post(
             'http://foa.fiscal.hust.edu.cn/toNewPage.action', data=data)
@@ -64,104 +62,104 @@ class CheckMoneyStatus(object):
         response.encoding = 'utf8'
         # with open('NewPage.html', 'wb') as f:
         #     f.write(response.content)
-        zyflist = re.findall(r'zyflistSource = \[(.+?)\];', response.text, re.DOTALL)
-        zyflist = zyflist[0]
-        code2text_list = re.findall(r"label: '(\S+)', value: '(\S+)'", zyflist)
-        code2text_dict = {}
-        for code2text in code2text_list:
-            code2text_dict[code2text[1]] = code2text[0]
+
+        # 获取可以查询的项目列表
+        data = {
+            'json': 'HZKJDX'
+        }
+        response = session.post('http://foa.fiscal.hust.edu.cn/wscx6/getAllFfxmlist.action', data=data)
+        data_dict = response.json()
+        ffxmdm_list = data_dict['data']
 
         # 再利用已登录的 session 访问含有实际数据网站
-        data = {
-            'filterscount': '0',
-            'groupscount': '0',
-            'pagenum': '0',
-            'pagesize': '20',
-            'recordstartindex': '0',
-            'recordendindex': '20',
-            'condition': '{"year_s":"","year_e":""}' # 起始年月
-        }
-        response = session.post('http://foa.fiscal.hust.edu.cn/wcsys6.0/getXszyfmx.action', data=data)
-        data_dict = response.json()
-        xszyfmx_list = data_dict['xszyfmx']
+        all_data_list = []
+        for ffxmdm in ffxmdm_list:
+            data = {
+                'json': '[{"csmc":"nian","val":"2022"},{"csmc":"ffxmdm","val":"' +
+                        ffxmdm['xmdm'] + '"},{"csmc":"schoolname","val":"HZKJDX"}]'
+            }
+            # nian 和 schoolname 对应的 val 无实际意义，但是必须有
+            response = session.post('http://foa.fiscal.hust.edu.cn/wscx6/getZyfxsbb.action', data=data)
+            data_dict = response.json()
+            data_list = data_dict['data']
+            if type(data_list) is list:
+                all_data_list.extend(data_list)
 
-        self.process_data(xszyfmx_list, code2text_dict)
+        self.process_data(all_data_list)
 
     @staticmethod
-    def process_data(xszyfmx_list, code2text_dict):
+    def process_data(all_data_list):
         # 获取当前日期，只处理近两个月的数据
         today = datetime.date.today()
-        this_month = datetime.date(today.year, today.month, 1)
-        # print(this_month)
+        this_month = {
+            'year': today.year,
+            'month': today.month
+        }
 
-        if this_month.month == 1:
+        if this_month['month'] == 1:
             diff_year = 1
             diff_month = -11
         else:
             diff_year = 0
             diff_month = 1
-        last_month = datetime.date(today.year - diff_year, today.month - diff_month, 1)
-        # print(last_month)
-
-        # 处理数据
-        data_list = []
-        for xszyfmx in xszyfmx_list:
-            one_line = {}
-            for key, value in xszyfmx.items():
-                if key in code2text_dict.keys():
-                    one_line[code2text_dict[key]] = value
-            input_date = datetime.date.fromisoformat(one_line['录入日期'])
-            one_line['录入日期'] = input_date
-            credit_date = datetime.date.fromisoformat(one_line['凭证日期'])
-            one_line['凭证日期'] = credit_date
-            if input_date < last_month:
-                break
-            data_list.append(one_line)
-            # print(one_line['年'], one_line['月'], one_line['发放项目'], one_line['实发金额'], one_line['录入日期'], one_line['凭证日期'], one_line['摘要'])
-
-        # with open('data.json', 'w') as f:
-        #     json.dump(data_list, f, ensure_ascii=False)
+        last_month = {
+            'year': today.year - diff_year,
+            'month': today.month - diff_month
+        }
 
         month_data_dict = {
             '本月': {
-                'input_count': 0,
-                'input_money_count': 0,
-                'credit_count': 0,
-                'credit_money_count': 0,
+                'got_count': 0,
+                'got_money_count': 0,
+                'pending_count': 0,
+                'pending_money_count': 0,
             },
             '上月': {
-                'input_count': 0,
-                'input_money_count': 0,
-                'credit_count': 0,
-                'credit_money_count': 0,
+                'got_count': 0,
+                'got_money_count': 0,
+                'pending_count': 0,
+                'pending_money_count': 0,
             },
         }
-        for data in data_list:
-            if data['录入日期'] > this_month:
+
+        data_list = []
+        for data in all_data_list:
+            month_data = None
+            if int(data['nian']) == this_month['year'] and int(data['yue']) == this_month['month']:
                 month_data = month_data_dict['本月']
-            else:
+                data_list.append(data)
+            elif int(data['nian']) == last_month['year'] and int(data['yue']) == last_month['month']:
                 month_data = month_data_dict['上月']
-            month_data['input_count'] += 1
-            month_data['input_money_count'] += data['实发金额']
-            if data['凭证日期'] <= today:
-                month_data['credit_count'] += 1
-                month_data['credit_money_count'] += data['实发金额']
+                data_list.append(data)
+            if month_data:
+                if data['state'] == '发放成功':
+                    month_data['got_count'] += 1
+                    month_data['got_money_count'] += data['je']
+                else:
+                    month_data['pending_count'] += 1
+                    month_data['pending_money_count'] += data['je']
 
+        print()
         for key, value in month_data_dict.items():
-            print('{} 录入 {} 笔，共 {} 元，其中 {} 笔 {} 元已生成凭证，还剩 {} 笔 {} 元未到账'.format(
-                key, value['input_count'], value['input_money_count'], value['credit_count'],
-                value['credit_money_count'], value['input_count'] - value['credit_count'], 
-                value['input_money_count'] - value['credit_money_count'])
-                )
+            print('{} 已发放 {} 笔，共 {} 元，还剩 {} 笔 {} 元未到账'.format(
+                key, value['got_count'], value['got_money_count'], value['pending_count'], value['pending_money_count']))
 
-        print('以下为近两月明细：')
+        print('\n以下为本月明细：')
         for data in data_list:
-            if data['录入日期'] > this_month:
-                print('本月：', end='')
-            else:
-                print('上月：', end='')
-            print('【{}】 \t{}\t元 \t{} 录入，{} 生成凭据，摘要：{}'.format(
-                data['发放项目'].split('-')[0], data['实发金额'], data['录入日期'], data['凭证日期'], data['摘要']))
+            if int(data['yue']) == this_month['month']:
+                print("|-", end='')
+                print(data['bmmc'], end='\t')
+                print(data['je'], end='\t')
+                print(data['state'], end='\t')
+                print(data['bz'])
+        print('\n以下为上月明细：')
+        for data in data_list:
+            if int(data['yue']) == last_month['month']:
+                print("|-", end='')
+                print(data['bmmc'], end='\t')
+                print(data['je'], end='\t')
+                print(data['state'], end='\t')
+                print(data['bz'])
 
 if __name__ == '__main__':
     hustPass = HustPass(user=input('账号：'), pwd=getpass.getpass('密码：'))
