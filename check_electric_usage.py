@@ -1,8 +1,8 @@
-# import datetime
 import random
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pymongo
 import requests
 from lxml import etree
 
@@ -13,10 +13,22 @@ class CheckElectricUsage(object):
     # @programId: 宿舍区
     # @txtyq: 宿舍楼栋
     # @Txtroom: 房间号
-    def __init__(self, programId: str, txtyq: str, Txtroom: str) -> None:
+    def __init__(
+        self,
+        programId: str,
+        txtyq: str,
+        Txtroom: str,
+        mongodb_connection: str = None,
+        db_name: str = None,
+        col_name: str = None
+    ) -> None:
         self._programId = programId
         self._txtyq = txtyq
         self._Txtroom = Txtroom
+        if (mongodb_connection):
+            self._col = pymongo.MongoClient(mongodb_connection)[db_name][col_name]
+        else:
+            self._col = None
 
     def run(self) -> None:
         data = {
@@ -39,9 +51,27 @@ class CheckElectricUsage(object):
         #     f.write(response.content)
 
         pay_list = self.getTableData(response.text, 'GridView1')
-        print(pay_list)
+        if pay_list:
+            for pay in pay_list:
+                print(pay)
+
         usage_list = self.getTableData(response.text, 'GridView2')
-        print(usage_list)
+        if self._col is not None:
+            for usage in usage_list:
+                data = {
+                    '_id': usage['抄表时间'],
+                    '抄表时间': usage['抄表时间'],
+                    '抄表值': float(usage['抄表值'])
+                }
+                try:
+                    self._col.insert_one(data)
+                except:
+                    self._col.find_one_and_replace({'_id': usage['抄表时间']}, data)
+            usage_list = self._col.find({},{"_id": 0, "抄表时间": 1, "抄表值": 1}).sort('抄表时间', 1)
+        else:
+            def get_time(usage):
+                return usage['抄表时间']
+            usage_list.sort(key=get_time)
 
         self._draw(usage_list)
 
@@ -53,13 +83,13 @@ class CheckElectricUsage(object):
 
         last = None
         for usage in usage_list:
-            labels.insert(0, usage['抄表时间'].split()[0])
-            y_data.insert(0, float(usage['抄表值']))
-            if last is None:
-                y_diff.insert(0, 0)
-            else:
-                y_diff.insert(0, float(usage['抄表值']) - last)
+            print(usage)
+            labels.append(usage['抄表时间'].split()[0])
+            y_data.append(float(usage['抄表值']))
+            if last:
+                y_diff.append(last - float(usage['抄表值']))
             last = float(usage['抄表值'])
+        y_diff.append(0)
 
         x = np.arange(len(labels))  # the label locations
         width = 0.35  # the width of the bars
@@ -102,5 +132,9 @@ class CheckElectricUsage(object):
 
 
 if __name__ == '__main__':
-    checkElectricUsage = CheckElectricUsage('韵苑', '韵苑5栋', '520')
+    checkElectricUsage = CheckElectricUsage('韵苑', '韵苑5栋', '520',
+                                            mongodb_connection='mongodb://localhost:27017/',
+                                            db_name='HustPass',
+                                            col_name='electric'
+                                            )
     checkElectricUsage.run()
