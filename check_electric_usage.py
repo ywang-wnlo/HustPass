@@ -1,4 +1,5 @@
 import random
+from datetime import datetime, timedelta, timezone
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -56,21 +57,27 @@ class CheckElectricUsage(object):
                 print(pay)
 
         usage_list = self.getTableData(response.text, 'GridView2')
+        for usage in usage_list:
+            [date, time] = usage['抄表时间'].split()
+            [year, month, day] = date.split('-')
+            [hour, minute, second] = time.split(':')
+            _datetime = datetime(int(year), int(month), int(day), int(hour),
+                                    int(minute), int(second),
+                                    tzinfo=timezone(timedelta(hours=8)))
+            usage['_id'] = _datetime
+            usage['抄表时间'] = str(_datetime)
+            usage['抄表值'] = float(usage['抄表值'])
+
         if self._col is not None:
             for usage in usage_list:
-                data = {
-                    '_id': usage['抄表时间'],
-                    '抄表时间': usage['抄表时间'],
-                    '抄表值': float(usage['抄表值'])
-                }
                 try:
-                    self._col.insert_one(data)
+                    self._col.insert_one(usage)
                 except:
-                    self._col.find_one_and_replace({'_id': usage['抄表时间']}, data)
-            usage_list = self._col.find({},{"_id": 0, "抄表时间": 1, "抄表值": 1}).sort('抄表时间', 1)
+                    continue
+            usage_list = self._col.find({}).sort('_id', 1)
         else:
             def get_time(usage):
-                return usage['抄表时间']
+                return usage['_id']
             usage_list.sort(key=get_time)
 
         self._draw(usage_list)
@@ -84,7 +91,9 @@ class CheckElectricUsage(object):
         last = None
         for usage in usage_list:
             print(usage)
-            labels.append(usage['抄表时间'].split()[0])
+            ymd = usage['抄表时间'].split()[0]
+            md = ymd.split('-', 1)[1]
+            labels.append(md)
             y_data.append(float(usage['抄表值']))
             if last:
                 y_diff.append(last - float(usage['抄表值']))
